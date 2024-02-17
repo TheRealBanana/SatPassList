@@ -151,7 +151,7 @@ def updatetle():
             print("ARe you suere?")
 
     print("Downloading weather.txt TLE file...")
-    urlretrieve("http://celestrak.org/NORAD/elements/weather.txt", "weather.txt")
+    urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle", "weather.txt")
 
 def create_time_string(seconds_total):
     days = int(seconds_total/(60*60*24))
