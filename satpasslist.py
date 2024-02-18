@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from time import sleep, time
 from datetime import datetime, timedelta
 from urllib.request import urlretrieve
