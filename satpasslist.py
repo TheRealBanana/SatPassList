@@ -211,7 +211,11 @@ def main():
     if args.satlist is True:
         printsatlist()
         exit(0)
-
+    
+    #Now manually run the TLE downloader if we don't have a weather.txt
+    if os.access("weather.txt", os.F_OK) is False:
+        updatetle()
+    
     #Ok not in TLE update mode or satlist mode, so make sure we have what we need.
     #TODO I would guess this is where we would load data from the config file when we do that
 
