@@ -1,0 +1,33 @@
+usage: satpasslist.py [-h] [--satlist] [--lat LAT] [--long LONG] [--alt ALT] [-t TIMEFRAME] [-e ELEVATIONLIMIT] ...
+
+A command line utility to print out predicted data on weather satellite passes at your location.
+
+positional arguments:
+  Satellite_Name        Name of the satellite as it appears in the TLE data
+
+options:
+  -h, --help            show this help message and exit
+  --satlist             Print out list of satellites in the current TLE data on disk.
+  --lat LAT             Latitude of the location we are making predictions for.
+  --long LONG           Longitude of the location we are making predictions for.
+  --alt ALT             Altitude of the location we are making predictions for (in meters). Defaults to sea level (0).
+  -t TIMEFRAME, --timeframe TIMEFRAME
+                        Time-frame to look for passes in (in hours). Default is 24.
+  -e ELEVATIONLIMIT, --elevationlimit ELEVATIONLIMIT
+                        Filter out all passes with max elevations lower than this (in degrees). Default is 0.
+
+
+
+The 4 required arguments are the latitude, longitude, altitude, and the satellite name.
+The latitude, longitude, and altitude are of your current location (or where you want the pass predictions for).
+
+Here's a basic example that lists all passes for NOAA 15 in the next 24 hours (the default time period).
+
+python satpasslist.py --lat 34.11843 --long -118.30041 --alt 345 NOAA 15
+
+Say we wanted to limit the list to only high elevation passes (say over 50 degrees):
+
+python satpasslist.py --lat 34.11843 --long -118.30041 --alt 345 --elevationlimit 50 NOAA 15
+
+We can also extend the timeframe we are looking in. Here's all the passes from NOAA 15 in the next 72 hours:
+python satpasslist.py --lat 34.11843 --long -118.30041 --alt 345 --timeframe 72 NOAA 15
