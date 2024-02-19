@@ -117,6 +117,8 @@ class SatFinder:
         #If we didn't get a good solid match then just return the closest thing along with None so we know its not a good match
         return [None, highestmatch[0] if highestmatch[1] > CLOSE_ENUF_RATIO else None]
 
+    #Technically this is duplicate code with printsatlist() but both functions are never expected to run at the same time
+    #Its either one or the other.
     def updatesatnames(self):
         #print("Updating list of satellites names...")
         self.satnames = []
@@ -128,9 +130,9 @@ class SatFinder:
                 line = tlefile.readline()
         self.satnames.sort()
 
-def updatetle():
+def updatetle(autocheck=False):
     #Don't really need to update if its under 2 days old.
-    if os.access("weather.txt", os.F_OK) is True:
+    if os.access("weather.txt", os.F_OK) is True and autocheck is False:
         #Check age
         curtime = time()
         filemodtime = int(os.stat("weather.txt").st_mtime)
@@ -140,6 +142,10 @@ def updatetle():
                 yn = input("Current TLE data is less than 48-hours old, are you sure you want to update? (Y/N): ").lower()
             if yn == "n":
                 return
+    #If we're autochecking at first start, download if its older than a week, but otherwise do nothing
+    if autocheck and os.access("weather.txt", os.F_OK) is True:
+        if time() - int(os.stat("weather.txt").st_mtime) < 7 * 24 * 60 * 60: # 2 days
+            return
     print("Downloading latest weather satellite TLE data from Celestrak.org...")
     urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle", "weather.txt")
 
@@ -212,9 +218,8 @@ def main():
         printsatlist()
         exit(0)
     
-    #Now manually run the TLE downloader if we don't have a weather.txt
-    if os.access("weather.txt", os.F_OK) is False:
-        updatetle()
+    #Now manually run the TLE downloader. If its not there or older than 7 days it will grab a new one
+    updatetle(autocheck=True)
     
     #Ok not in TLE update mode or satlist mode, so make sure we have what we need.
     #TODO I would guess this is where we would load data from the config file when we do that
