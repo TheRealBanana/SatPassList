@@ -65,12 +65,10 @@ class SatFinder:
             print("%s) %s - %s%s degree MEL pass (%s Long) heading %s in %s - duration %s" % (i+1, nicestarttime, round(max_location[1]), eastwest, longtext, direction, startimetext, durationtext))
 
     def passlist(self, satparams, satname, time_limit):
-        #satparams = self.getsatparams(satname)
         if satparams is None:
             return None
         #Horizon limit will affect the start and finish times of the pass and the displayed total duration
-        #Do we want to know how long the pass will take with our tracking limits or how long the pass is from horizon to horizon?
-        #For now we're counting from the tracking limits.
+        #Because this is app isn't connected to any tracking apps, we want to display the full pass information from a 0 degree horizon.
         passlist = satparams.get_next_passes(datetime.now(pytz.utc), time_limit, self.ANTENNA_GPS_LONG, self.ANTENNA_GPS_LAT, self.ANTENNA_GPS_ALT) #Next 24 hours
         #Filter out passes with max elevations below our filter limit. We filter here instead of using the horizon arg of get_next_passes because
         #the horizon arg modifies the start and end times of the pass based on that horizon limit. We want the horizon limit AND the full pass times.
@@ -132,20 +130,23 @@ class SatFinder:
 
 def updatetle(autocheck=False):
     #Don't really need to update if its under 2 days old.
-    if os.access("weather.txt", os.F_OK) is True and autocheck is False:
-        #Check age
-        curtime = time()
-        filemodtime = int(os.stat("weather.txt").st_mtime)
-        if curtime - filemodtime < 2 * 24 * 60 * 60: # 2 days
-            yn = '.'
-            while yn not in "yn":
-                yn = input("Current TLE data is less than 48-hours old, are you sure you want to update? (Y/N): ").lower()
-            if yn == "n":
+    if os.access("weather.txt", os.F_OK) is True:
+        #File exists and we're not autochecking
+        if autocheck is False:
+            #Check age
+            curtime = time()
+            filemodtime = int(os.stat("weather.txt").st_mtime)
+            if curtime - filemodtime < 2 * 24 * 60 * 60: # 2 days
+                yn = '.'
+                while yn not in "yn":
+                    yn = input("Current TLE data is less than 48-hours old, are you sure you want to update? (Y/N): ").lower()
+                if yn == "n":
+                    return
+        #File exists and we are autochecking.
+        else:
+           #App start autocheck, so download if its older than a week, but otherwise do nothing
+           if time() - int(os.stat("weather.txt").st_mtime) < 7 * 24 * 60 * 60: # 2 days
                 return
-    #If we're autochecking at first start, download if its older than a week, but otherwise do nothing
-    if autocheck and os.access("weather.txt", os.F_OK) is True:
-        if time() - int(os.stat("weather.txt").st_mtime) < 7 * 24 * 60 * 60: # 2 days
-            return
     print("Downloading latest weather satellite TLE data from Celestrak.org...")
     urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle", "weather.txt")
 
@@ -252,11 +253,15 @@ def main():
         print("Invalid timeframe period, this should be a positive integer value (Default is 24).")
         exit(1)
 
-    #Ok so all values except the satellite name have been validated as been somewhat sane, we can get a SatFinder obj running.
-    satfind = SatFinder(args.long, args.lat, args.alt/1000, args.elevationlimit, satname)
+    #Ok so all values except the satellite name have been validated as being somewhat sane, we can get a SatFinder obj running.
+    satfind = SatFinder(args.long, args.lat, args.alt/1000, args.elevationlimit, satname) #pyorbital takes altitude in km, but we like to use meters so divide by 1000.
 
     #Now we can validate the sat name at the same time we get satparams
     satparams = satfind.getsatparams(satname)
+    #Technically passlist() will just return none when we give it a nonetype satparams, so it will just exit one function call later
+    #But why not do it here properly.
+    if satparams is None:
+        exit(0)
     passes = satfind.passlist(satparams, satname, args.timeframe)
     if passes is None:
         exit(0)
