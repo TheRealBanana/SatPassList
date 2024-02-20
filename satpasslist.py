@@ -76,7 +76,7 @@ class SatFinder:
         if len(passlist) > 0:
             print("Found %s matching passes in the next %s hours for '%s':" % (len(passlist), time_limit, satname))
         else:
-            print("No matching passes above for %s in the next %s hours using current TLE data." % (satname, time_limit))
+            print("No matching passes for %s found in the next %s hours using current TLE data." % (satname, time_limit))
             return None
         return passlist
 
@@ -198,24 +198,71 @@ parser = argparse.ArgumentParser(description=desc)
 parser.add_argument("--satlist", help="Print out list of satellites in the current TLE data on disk.", action="store_true")
 parser.add_argument("--lat", help="Latitude of the location we are making predictions for.", type=float)
 parser.add_argument("--long", help="Longitude of the location we are making predictions for.", type=float)
-parser.add_argument("--alt", help="Altitude of the location we are making predictions for (in meters). Defaults to sea level (0).", default=0, type=float)
-parser.add_argument("-t", "--timeframe", help="Time-frame to look for passes in (in hours). Default is 24.", default=24, type=int)
-parser.add_argument("-e", "--elevationlimit", help="Filter out all passes with max elevations lower than this (in degrees). Default is 0.", default=0, type=int)
+parser.add_argument("--alt", help="Altitude of the location we are making predictions for (in meters). Defaults to sea level (0).", type=float)
+parser.add_argument("-t", "--timeframe", help="Time-frame to look for passes in (in hours). Default is 24.", type=int)
+parser.add_argument("-e", "--elevationlimit", help="Filter out all passes with max elevations lower than this (in degrees). Default is 0.", type=int)
 #parser.add_argument("-u", "--updatetle", help="Manually update weather.txt TLE data from Celestrak.", )
 parser.add_argument("-u", "--updatetle", help=argparse.SUPPRESS, action="store_true")
-parser.add_argument("Satellite_Name", help="Name of the satellite as it appears in the TLE data", nargs=argparse.REMAINDER, default='')
+parser.add_argument("Satellite_Name", help="Name of the satellite as it appears in the TLE data", nargs=argparse.REMAINDER)
 #To save time, a config file can be used to set all the above arguments at once.
 #TODO Implement loading config file to override arguments (or should arguments override config?).
 #For now command line arguments are sufficient.
 
-def main():
+
+def load_config():
+    #We're going to return a dictionary with our settings in it, and it will be a combination of the config file and
+    #command-line arguments. We'll load the config file first, then overwrite those with any command-line arguments.
+    #Moving default values here instead of in parser.add_argument because default values not given as args will still
+    #override config values.
+    config = {
+        "satlist": False,
+        "lat": None,
+        "long": None,
+        "alt": 0,
+        "timeframe": 24,
+        "elevationlimit": 0,
+        "updatetle": False,
+        "Satellite_Name": ""
+    }
+    with open("satpasslist.conf", "r") as configfile:
+        line = '.'
+        while line != '':
+            line = configfile.readline().strip()
+            if len(line) == 0 or line[0] == "#": continue
+            key = line[:line.index("=")]
+            value = line[line.index("=")+1:]
+            if len(value) == 0 or value == None: continue
+            #Ok a few values in the config need to be made into floats or ints. Handle that here.
+            #Satellite_Name breaks things so dont mess with it
+            if key != "Satellite_Name":
+                tfunc = parser._option_string_actions["--%s" % key].type
+                value = tfunc(value)
+            config[key] = value # Will fail if you misspell anything
+    #Now go through command-line args and override the config values with anything given
     args = parser.parse_args()
+    for k in config.keys():
+        val = getattr(args, k)
+        if val is None:
+            continue
+        #Handle sat name
+        if k == "Satellite_Name":
+            if len(val) > 0:
+                val = " ".join(val)
+            else:
+                continue
+        config[k] = val
+
+    return config
+
+
+def main():
+    args = load_config()
     # Check if we are updating the TLE first
-    if args.updatetle is True:
+    if args["updatetle"] is True:
         updatetle()
         exit(0)
 
-    if args.satlist is True:
+    if args["satlist"] is True:
         printsatlist()
         exit(0)
     
@@ -226,43 +273,41 @@ def main():
     #TODO I would guess this is where we would load data from the config file when we do that
 
     #The 3 bare minimum required arguments are the latitude, longitude, and sat name.
-    if args.lat is None:
+    if args["lat"] is None:
         print("You must include your latitude (--lat) to get any pass information. See --help for more information.")
         exit(1)
-    if args.long is None:
+    if args["long"] is None:
         print("You must include your longitude (--long) to get any pass information. See --help for more information.")
         exit(1)
-    if len(args.Satellite_Name) == 0:
+    if len(args["Satellite_Name"]) == 0:
         print("You must give the name of a satellite as the last argument. See --help for more information or --satlist for a list of satellites.")
         exit(1)
-    #To save headaches later, we'll be using this from now on
-    satname = " ".join(args.Satellite_Name)
 
     #Basic sanity checks on all the arguments we will be using: lat long alt timeframe elevationlimit Satellite_Name
-    if abs(float(args.lat)) > 90:
-        print("Invalid entry for latitude: '%s'. Valid values are between -90 and 90." % args.lat)
+    if abs(float(args["lat"])) > 90:
+        print("Invalid entry for latitude: '%s'. Valid values are between -90 and 90." % args["lat"])
         exit(1)
-    if abs(float(args.long)) > 180:
-        print("Invalid entry for longitude: '%s'. Valid values are between -180 and 180." % args.long)
+    if abs(float(args["long"])) > 180:
+        print("Invalid entry for longitude: '%s'. Valid values are between -180 and 180." % args["long"])
         exit(1)
     #Nothing valid on earth should ever be outside those values (or even near either).
-    if not -500 < float(args.alt) < 9000:
-        print("Invalid entry for altitude: '%s'. This should be your altitude in meters, recheck your altimeter." % args.alt)
+    if not -500 < float(args["alt"]) < 9000:
+        print("Invalid entry for altitude: '%s'. This should be your altitude in meters, recheck your altimeter." % args["alt"])
     #Just because we should probably set a limit, we're limiting the timeframe to a max of 30 days (720 hours)
-    if not 0 < args.timeframe < 721:
+    if not 0 < args["timeframe"] < 721:
         print("Invalid timeframe period, this should be a positive integer value (Default is 24).")
         exit(1)
 
     #Ok so all values except the satellite name have been validated as being somewhat sane, we can get a SatFinder obj running.
-    satfind = SatFinder(args.long, args.lat, args.alt/1000, args.elevationlimit, satname) #pyorbital takes altitude in km, but we like to use meters so divide by 1000.
+    satfind = SatFinder(args["long"], args["lat"], args["alt"]/1000, args["elevationlimit"], args["Satellite_Name"]) #pyorbital takes altitude in km, but we like to use meters so divide by 1000.
 
     #Now we can validate the sat name at the same time we get satparams
-    satparams = satfind.getsatparams(satname)
+    satparams = satfind.getsatparams(args["Satellite_Name"])
     #Technically passlist() will just return none when we give it a nonetype satparams, so it will just exit one function call later
     #But why not do it here properly.
     if satparams is None:
         exit(0)
-    passes = satfind.passlist(satparams, satname, args.timeframe)
+    passes = satfind.passlist(satparams, args["Satellite_Name"], args["timeframe"])
     if passes is None:
         exit(0)
     satfind.printpasses(satparams, passes)
