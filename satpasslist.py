@@ -13,6 +13,11 @@ SATNAME_MATCH_RATIO = 0.95
 #If the matcher thinks the input match is between 0.95 and 0.75 it assumes you may have misstyped and asks if you meant a similar name.
 CLOSE_ENUF_RATIO = 0.75
 
+#need this later for a couple file loading things
+RUNFOLDER = os.path.dirname(__file__)
+CONFPATH = os.path.join(RUNFOLDER, "satpasslist.conf")
+TLEFILEPATH = os.path.join(RUNFOLDER, "weather.txt")
+
 class SatFinder:
     def __init__(self, ANTENNA_GPS_LONG, ANTENNA_GPS_LAT, ANTENNA_GPS_ALT, PASSLIST_FILTER_ELEVATION, timeframe):
         self.satnames = []
@@ -83,7 +88,7 @@ class SatFinder:
     def getsatparams(self, satname):
         #Check if the satellite exists
         try:
-            satparams = orbital.Orbital(satname, tle_file="weather.txt")
+            satparams = orbital.Orbital(satname, tle_file=TLEFILEPATH)
         except KeyError:
             closenamecheck = self.findclosestsatname(satname)
             if isinstance(closenamecheck, list):
@@ -97,7 +102,7 @@ class SatFinder:
                 return None
             else:
                 print("Returning results for '%s' as '%s' wasn't found in the satellite list." % (closenamecheck, satname))
-                satparams = orbital.Orbital(closenamecheck, tle_file="weather.txt")
+                satparams = orbital.Orbital(closenamecheck, tle_file=TLEFILEPATH)
         except NotImplementedError:
             print("Pyorbital doesn't yet support calculations for geostationary satellites. There are alternative libraries that I have yet to try that may support them.")
             return None
@@ -120,7 +125,7 @@ class SatFinder:
     def updatesatnames(self):
         #print("Updating list of satellites names...")
         self.satnames = []
-        with open("weather.txt", "r") as tlefile:
+        with open(TLEFILEPATH, "r") as tlefile:
             line = tlefile.readline()
             while line != '':
                 if line[0].isdigit() is False:
@@ -130,12 +135,12 @@ class SatFinder:
 
 def updatetle(autocheck=False):
     #Don't really need to update if its under 2 days old.
-    if os.access("weather.txt", os.F_OK) is True:
+    if os.access(TLEFILEPATH, os.F_OK) is True:
         #File exists and we're not autochecking
         if autocheck is False:
             #Check age
             curtime = time()
-            filemodtime = int(os.stat("weather.txt").st_mtime)
+            filemodtime = int(os.stat(TLEFILEPATH).st_mtime)
             if curtime - filemodtime < 2 * 24 * 60 * 60: # 2 days
                 yn = '.'
                 while yn not in "yn":
@@ -145,10 +150,10 @@ def updatetle(autocheck=False):
         #File exists and we are autochecking.
         else:
            #App start autocheck, so download if its older than a week, but otherwise do nothing
-           if time() - int(os.stat("weather.txt").st_mtime) < 7 * 24 * 60 * 60: # 2 days
+           if time() - int(os.stat(TLEFILEPATH).st_mtime) < 7 * 24 * 60 * 60: # 2 days
                 return
     print("Downloading latest weather satellite TLE data from Celestrak.org...")
-    urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle", "weather.txt")
+    urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle", TLEFILEPATH)
 
 def create_time_string(seconds_total):
     days = int(seconds_total/(60*60*24))
@@ -172,7 +177,7 @@ def create_time_string(seconds_total):
 
 def printsatlist():
     satnames = []
-    with open("weather.txt", "r") as tlefile:
+    with open(TLEFILEPATH, "r") as tlefile:
         line = tlefile.readline()
         while line != '':
             if line[0].isdigit() is False:
@@ -224,20 +229,25 @@ def load_config():
         "updatetle": False,
         "Satellite_Name": ""
     }
-    with open("satpasslist.conf", "r") as configfile:
-        line = '.'
-        while line != '':
-            line = configfile.readline().strip()
-            if len(line) == 0 or line[0] == "#": continue
-            key = line[:line.index("=")]
-            value = line[line.index("=")+1:]
-            if len(value) == 0 or value == None: continue
-            #Ok a few values in the config need to be made into floats or ints. Handle that here.
-            #Satellite_Name breaks things so dont mess with it
-            if key != "Satellite_Name":
-                tfunc = parser._option_string_actions["--%s" % key].type
-                value = tfunc(value)
-            config[key] = value # Will fail if you misspell anything
+    #We are assuming the config file is in the same directory as this .py file. Running from a folder in your PATH var and loading
+    #the config as "./satpasslist.conf" tries to load it from the dir the user invoked the py from, not the folder the py is in.
+    #Easy peasy to fix, just do an os.path.dirname() (or take the first element from os.path.split()) and combine that with the conf
+    #file name.
+    if os.access(CONFPATH, os.F_OK):
+        with open(CONFPATH, "r") as configfile:
+            line = '.'
+            while line != '':
+                line = configfile.readline().strip()
+                if len(line) == 0 or line[0] == "#": continue
+                key = line[:line.index("=")]
+                value = line[line.index("=")+1:]
+                if len(value) == 0 or value == None: continue
+                #Ok a few values in the config need to be made into floats or ints. Handle that here.
+                #Satellite_Name breaks things so dont mess with it
+                if key != "Satellite_Name":
+                    tfunc = parser._option_string_actions["--%s" % key].type
+                    value = tfunc(value)
+                config[key] = value # Will fail if you misspell anything
     #Now go through command-line args and override the config values with anything given
     args = parser.parse_args()
     for k in config.keys():
@@ -262,12 +272,13 @@ def main():
         updatetle()
         exit(0)
 
+    #Now manually run the TLE downloader. If its not there or older than 7 days it will grab a new one
+    #The --satlist arg needs the TLE file to be there, so we need to autocheck that first. 
+    updatetle(autocheck=True)
+
     if args["satlist"] is True:
         printsatlist()
         exit(0)
-    
-    #Now manually run the TLE downloader. If its not there or older than 7 days it will grab a new one
-    updatetle(autocheck=True)
     
     #Ok not in TLE update mode or satlist mode, so make sure we have what we need.
     #TODO I would guess this is where we would load data from the config file when we do that
