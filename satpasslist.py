@@ -5,6 +5,7 @@ from urllib.request import urlretrieve
 import argparse
 import os, os.path, pytz
 from difflib import SequenceMatcher
+orbital = None
 
 #If the sequence matcher thinks the input is over SATNAME_MATCH_RATIO it will assume they are the same
 SATNAME_MATCH_RATIO = 0.95
@@ -264,6 +265,7 @@ def load_config():
 
 
 def main():
+    global orbital
     args = load_config()
     # Check if we are updating the TLE first
     if args["updatetle"] is True:
