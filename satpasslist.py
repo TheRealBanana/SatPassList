@@ -5,8 +5,6 @@ from urllib.request import urlretrieve
 import argparse
 import os, os.path, pytz
 from difflib import SequenceMatcher
-print("Loading pyorbital...")
-from pyorbital import orbital
 
 #If the sequence matcher thinks the input is over SATNAME_MATCH_RATIO it will assume they are the same
 SATNAME_MATCH_RATIO = 0.95
@@ -282,7 +280,11 @@ def main():
     
     #Ok not in TLE update mode or satlist mode, so make sure we have what we need.
     #TODO I would guess this is where we would load data from the config file when we do that
-
+    
+    #Takes a bit of time to load the library, so for help args and satlist/updatetle we don't need it so we can save time
+    print("Loading pyorbital...")
+    from pyorbital import orbital
+    
     #The 3 bare minimum required arguments are the latitude, longitude, and sat name.
     if args["lat"] is None:
         print("You must include your latitude (--lat) to get any pass information. See --help for more information.")
