@@ -155,10 +155,10 @@ def updatetle(autocheck=False):
     urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle", TLEFILEPATH)
 
 def create_time_string(seconds_total):
-    days = int(seconds_total/(60*60*24))
-    hours = int(seconds_total%(60*60*24)/(60*60))
-    minutes = int(seconds_total%(60*60*24)%(60*60)/60)
-    seconds = int(seconds_total%(60*60*24)%(60*60)%60)
+    days = int(seconds_total/86400)
+    hours = int((seconds_total%86400)/3600)
+    minutes = int((seconds_total%86400%3600)/60)
+    seconds = int(seconds_total%86400%3600%60)
     timestring = ""
     if days > 0:
         timestring += "%s day " % days
@@ -172,6 +172,7 @@ def create_time_string(seconds_total):
     if seconds > 0:
         timestring += "%s second" % seconds
         if seconds > 1: timestring += "s"
+    timestring = timestring.strip()
     return timestring
 
 def printsatlist():
@@ -240,7 +241,7 @@ def load_config():
                 if len(line) == 0 or line[0] == "#": continue
                 key = line[:line.index("=")]
                 value = line[line.index("=")+1:]
-                if len(value) == 0 or value == None: continue
+                if len(value) == 0 or value is None: continue
                 #Ok a few values in the config need to be made into floats or ints. Handle that here.
                 #Satellite_Name breaks things so dont mess with it
                 if key != "Satellite_Name":
@@ -282,7 +283,7 @@ def main():
     
     #Ok not in TLE update mode or satlist mode, so make sure we have what we need.
     #TODO I would guess this is where we would load data from the config file when we do that
-    
+
     #Takes a bit of time to load the library, so for help args and satlist/updatetle we don't need it so we can save time
     print("Loading pyorbital...")
     from pyorbital import orbital
