@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from time import sleep, time
+from time import time
 from datetime import datetime, timedelta
 from urllib.request import urlretrieve
 import argparse
@@ -36,6 +36,8 @@ class SatFinder:
             filteredpasses.append(passdata)
         return filteredpasses
 
+    #TODO I would definitely appreciate a way to filter out eastern or western passes at certain times.
+    #Would be easy enough to do that here
     def printpasses(self, passlist):
         #Our passdata is a list of passes with our satname and satparams attached to the end
         for i, passdata in enumerate(passlist):
