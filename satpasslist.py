@@ -18,13 +18,12 @@ CONFPATH = os.path.join(RUNFOLDER, "satpasslist.conf")
 TLEFILEPATH = os.path.join(RUNFOLDER, "weather.txt")
 
 class SatFinder:
-    def __init__(self, ANTENNA_GPS_LONG, ANTENNA_GPS_LAT, ANTENNA_GPS_ALT, PASSLIST_FILTER_ELEVATION, timeframe):
+    def __init__(self, ANTENNA_GPS_LONG, ANTENNA_GPS_LAT, ANTENNA_GPS_ALT, PASSLIST_FILTER_ELEVATION):
         self.satnames = []
         self.ANTENNA_GPS_LONG = ANTENNA_GPS_LONG
         self.ANTENNA_GPS_LAT = ANTENNA_GPS_LAT
         self.ANTENNA_GPS_ALT = ANTENNA_GPS_ALT
         self.PASSLIST_FILTER_ELEVATION = PASSLIST_FILTER_ELEVATION
-        self.timeframe = timeframe
         self.updatesatnames()
 
     #Takes in a passlist, filters out passes with max elevations under the elevation_limit, and returns the list
@@ -37,12 +36,16 @@ class SatFinder:
             filteredpasses.append(passdata)
         return filteredpasses
 
-    def printpasses(self, satparams, passlist):
-        #Go over the list and pull out some details, then print each one
+    def printpasses(self, passlist):
+        #Our passdata is a list of passes with our satname and satparams attached to the end
         for i, passdata in enumerate(passlist):
             #passdata[0] = AOS time
             #passdata[1] = LOS time
             #passdata[2] = max elevation time
+            #passdata[-2]= satname
+            #passdata[-1]= satparams
+            satname = passdata[-2]
+            satparams = passdata[-1]
             localtz = passdata[0].astimezone()
             nicestarttime = localtz.strftime("%Y-%m-%d %H:%M:%S")
             starttime = localtz - datetime.now().astimezone()
@@ -66,7 +69,7 @@ class SatFinder:
             if max_location[0] < 180:
                 di ^= 1
             direction = ns[di]
-            print("%s) %s - %s%s degree MEL pass (%s Long) heading %s in %s - duration %s" % (i+1, nicestarttime, round(max_location[1]), eastwest, longtext, direction, startimetext, durationtext))
+            print("%s) %s\t- %s - %s%s degree MEL pass (%s Long) heading %s in %s - duration %s" % (i+1, satname, nicestarttime, round(max_location[1]), eastwest, longtext, direction, startimetext, durationtext))
 
     def passlist(self, satparams, satname, time_limit):
         if satparams is None:
@@ -78,7 +81,7 @@ class SatFinder:
         #the horizon arg modifies the start and end times of the pass based on that horizon limit. We want the horizon limit AND the full pass times.
         passlist = self.filterpasses(satparams, passlist, self.PASSLIST_FILTER_ELEVATION)
         if len(passlist) > 0:
-            print("Found %s matching passes in the next %s hours for '%s':" % (len(passlist), time_limit, satname))
+            print("Found %s matching passes in the next %s hours for '%s'." % (len(passlist), time_limit, satname))
         else:
             print("No matching passes for %s found in the next %s hours using current TLE data." % (satname, time_limit))
             return None
@@ -208,11 +211,8 @@ parser.add_argument("-t", "--timeframe", help="Time-frame to look for passes in 
 parser.add_argument("-e", "--elevationlimit", help="Filter out all passes with max elevations lower than this (in degrees). Default is 0.", type=int)
 #parser.add_argument("-u", "--updatetle", help="Manually update weather.txt TLE data from Celestrak.", )
 parser.add_argument("-u", "--updatetle", help=argparse.SUPPRESS, action="store_true")
-parser.add_argument("Satellite_Name", help="Name of the satellite as it appears in the TLE data", nargs=argparse.REMAINDER)
+parser.add_argument("Satellite_Name", help="Name of the satellite as it appears in the TLE data. Multiple satellites names can be given by separating them with a comma (,).", nargs=argparse.REMAINDER)
 #To save time, a config file can be used to set all the above arguments at once.
-#TODO Implement loading config file to override arguments (or should arguments override config?).
-#For now command line arguments are sufficient.
-
 
 def load_config():
     #We're going to return a dictionary with our settings in it, and it will be a combination of the config file and
@@ -282,12 +282,6 @@ def main():
         exit(0)
     
     #Ok not in TLE update mode or satlist mode, so make sure we have what we need.
-    #TODO I would guess this is where we would load data from the config file when we do that
-
-    #Takes a bit of time to load the library, so for help args and satlist/updatetle we don't need it so we can save time
-    print("Loading pyorbital...")
-    from pyorbital import orbital
-    
     #The 3 bare minimum required arguments are the latitude, longitude, and sat name.
     if args["lat"] is None:
         print("You must include your latitude (--lat) to get any pass information. See --help for more information.")
@@ -314,19 +308,37 @@ def main():
         print("Invalid timeframe period, this should be a positive integer value (Default is 24).")
         exit(1)
 
-    #Ok so all values except the satellite name have been validated as being somewhat sane, we can get a SatFinder obj running.
-    satfind = SatFinder(args["long"], args["lat"], args["alt"]/1000, args["elevationlimit"], args["Satellite_Name"]) #pyorbital takes altitude in km, but we like to use meters so divide by 1000.
+    #Takes a bit of time to load the library, so for help args and satlist/updatetle we don't need it so we can save time
+    print("Loading pyorbital...")
+    from pyorbital import orbital
 
-    #Now we can validate the sat name at the same time we get satparams
-    satparams = satfind.getsatparams(args["Satellite_Name"])
-    #Technically passlist() will just return none when we give it a nonetype satparams, so it will just exit one function call later
-    #But why not do it here properly.
-    if satparams is None:
+    #Ok so all values except the satellite name have been validated as being somewhat sane, we can get a SatFinder obj running.
+    #Convert Satellite_Name into a list, which will separate values at the comma and remove whitespace at the ends.
+    satnamelist = [s.strip() for s in args["Satellite_Name"].split(",") if len(s) > 0]
+    satfind = SatFinder(args["long"], args["lat"], args["alt"]/1000, args["elevationlimit"]) #pyorbital takes altitude in km, but we like to use meters so divide by 1000.
+    satpassdata = []
+    #each item in the list is the tuple returned from get_next_passes() with the satname and satparams attached to the end
+    for satname in satnamelist:
+        #Now we can validate the sat name at the same time we get satparams
+        satparams = satfind.getsatparams(satname)
+        #Technically passlist() will just return none when we give it a nonetype satparams, so it will just exit one function call later
+        #But why not do it here properly.
+        if satparams is None:
+            continue
+        passes = satfind.passlist(satparams, satname, args["timeframe"])
+        if passes is None:
+            continue
+        #Annotate the passes list with the satname and satparams
+        apasses = []
+        for p in passes:
+            apasses.append((*p, satname, satparams))
+        satpassdata += apasses
+    if len(satpassdata) == 0:
         exit(0)
-    passes = satfind.passlist(satparams, args["Satellite_Name"], args["timeframe"])
-    if passes is None:
-        exit(0)
-    satfind.printpasses(satparams, passes)
+    #Because the first index of each tuple is a datetime object, we can just do a simple sort() on our list to put it in chronological order
+    satpassdata.sort()
+    satfind.printpasses(satpassdata)
+
 
 if __name__ == "__main__":
    main()
