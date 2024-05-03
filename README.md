@@ -1,5 +1,6 @@
+```ruby
 usage: satpasslist.py [-h] [--satlist] [--lat LAT] [--long LONG] [--alt ALT] [-t TIMEFRAME] [-e ELEVATIONLIMIT] ...
-
+```
 A command line utility to print out predicted data on weather satellite passes at your location.
 
 positional arguments:
