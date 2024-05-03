@@ -1,6 +1,7 @@
 ```ruby
 usage: satpasslist.py [-h] [--satlist] [--lat LAT] [--long LONG] [--alt ALT] [-t TIMEFRAME] [-e ELEVATIONLIMIT] ...
 ```
+```
 A command line utility to print out predicted data on weather satellite passes at your location.
 
 positional arguments:
@@ -16,7 +17,7 @@ options:
                         Time-frame to look for passes in (in hours). Default is 24.
   -e ELEVATIONLIMIT, --elevationlimit ELEVATIONLIMIT
                         Filter out all passes with max elevations lower than this (in degrees). Default is 0.
-
+```
 
 
 The 4 required arguments are the latitude, longitude, altitude, and the satellite name.
