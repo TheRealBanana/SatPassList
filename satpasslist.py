@@ -8,7 +8,7 @@ from difflib import SequenceMatcher
 orbital = None
 
 #If the sequence matcher thinks the input is over SATNAME_MATCH_RATIO it will assume they are the same
-SATNAME_MATCH_RATIO = 0.95
+SATNAME_MATCH_RATIO = 0.90
 #If the matcher thinks the input match is between 0.95 and 0.75 it assumes you may have misstyped and asks if you meant a similar name.
 CLOSE_ENUF_RATIO = 0.75
 
@@ -124,18 +124,8 @@ class SatFinder:
         #If we didn't get a good solid match then just return the closest thing along with None so we know its not a good match
         return [None, highestmatch[0] if highestmatch[1] > CLOSE_ENUF_RATIO else None]
 
-    #Technically this is duplicate code with printsatlist() but both functions are never expected to run at the same time
-    #Its either one or the other.
     def updatesatnames(self):
-        #print("Updating list of satellites names...")
-        self.satnames = []
-        with open(TLEFILEPATH, "r") as tlefile:
-            line = tlefile.readline()
-            while line != '':
-                if line[0].isdigit() is False:
-                    self.satnames.append(line.strip())
-                line = tlefile.readline()
-        self.satnames.sort()
+        self.satnames = getsatnamelist()
 
 def updatetle(autocheck=False):
     #Don't really need to update if its under 2 days old.
@@ -180,7 +170,8 @@ def create_time_string(seconds_total):
     timestring = timestring.strip()
     return timestring
 
-def printsatlist():
+
+def getsatnamelist():
     satnames = []
     with open(TLEFILEPATH, "r") as tlefile:
         line = tlefile.readline()
@@ -189,6 +180,10 @@ def printsatlist():
                 satnames.append(line.strip())
             line = tlefile.readline()
     satnames.sort()
+    return satnames
+
+def printsatlist():
+    satnames = getsatnamelist()
     #Make it fancy lookin
     linestrs = [""]
     #Approx limit for each line
@@ -327,6 +322,8 @@ def main():
         #But why not do it here properly.
         if satparams is None:
             continue
+        #Using the internal satellite names in satparams instead of the supplied name incase we had to correct a typo
+        satname = satparams.satellite_name
         passes = satfind.passlist(satparams, satname, args["timeframe"])
         if passes is None:
             continue
