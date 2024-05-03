@@ -45,4 +45,18 @@ Found 5 matching passes in the next 72 hours for 'NOAA 15':
 4) 2024-02-20 07:16:10 - 61E degree MEL pass (114W Long) heading South in 2 days 5 hours 10 minutes 14 seconds - duration 15 minutes 11 seconds
 5) 2024-02-20 18:32:08 - 65E degree MEL pass (115W Long) heading North in 2 days 16 hours 26 minutes 13 seconds - duration 15 minutes 4 seconds
 ```
-
+You can also search for multiple satellites at once by separating their names with a comma:
+```ruby
+python satpasslist.py --lat 34.11843 --long -118.30041 --alt 345 NOAA 15, NOAA 18, NOAA 19
+Loading pyorbital...
+Found 2 matching passes in the next 24 hours for 'NOAA 15'.
+Found 2 matching passes in the next 24 hours for 'NOAA 18'.
+Found 2 matching passes in the next 24 hours for 'NOAA 19'.
+1) NOAA 15      - 2024-05-03 08:39:10 - 76W degree MEL pass (120W Long) heading South in 7 hours 29 minutes 13 seconds - duration 15 minutes 5 seconds
+2) NOAA 19      - 2024-05-03 10:08:06 - 67E degree MEL pass (115W Long) heading South in 8 hours 58 minutes 9 seconds - duration 15 minutes 39 seconds
+3) NOAA 18      - 2024-05-03 11:27:16 - 55E degree MEL pass (113W Long) heading South in 10 hours 17 minutes 19 seconds - duration 15 minutes 28 seconds
+4) NOAA 15      - 2024-05-03 19:55:04 - 72W degree MEL pass (121W Long) heading North in 18 hours 45 minutes 7 seconds - duration 15 minutes 7 seconds
+5) NOAA 19      - 2024-05-03 21:30:25 - 86E degree MEL pass (118W Long) heading South in 20 hours 20 minutes 28 seconds - duration 15 minutes 36 seconds
+6) NOAA 18      - 2024-05-03 22:49:20 - 71E degree MEL pass (116W Long) heading North in 21 hours 39 minutes 23 seconds - duration 15 minutes 44 seconds
+```
+The command-line arguments can also be set permanently in the config file so they don't have to be supplied at runtime. Options given on the command-line will override anything in the config file.
