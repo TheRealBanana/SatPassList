@@ -16,6 +16,7 @@ CLOSE_ENUF_RATIO = 0.75
 RUNFOLDER = os.path.dirname(__file__)
 CONFPATH = os.path.join(RUNFOLDER, "satpasslist.conf")
 TLEFILEPATH = os.path.join(RUNFOLDER, "weather.txt")
+TLEURL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle"
 
 class SatFinder:
     def __init__(self, ANTENNA_GPS_LONG, ANTENNA_GPS_LAT, ANTENNA_GPS_ALT, PASSLIST_FILTER_ELEVATION):
@@ -147,7 +148,12 @@ def updatetle(autocheck=False):
            if time() - int(os.stat(TLEFILEPATH).st_mtime) < 7 * 24 * 60 * 60: # 2 days
                 return
     print("Downloading latest weather satellite TLE data from Celestrak.org...")
-    urlretrieve("https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle", TLEFILEPATH)
+    try:
+        urlretrieve(TLEURL, TLEFILEPATH)
+    except Exception as e:
+        print("Failed to download weather.txt from celestrak.org. Reason: \n%s" % str(e))
+    else:
+        print("Successfully downloaded a fresh weather.txt from celestrak.org")
 
 def create_time_string(seconds_total):
     days = int(seconds_total/86400)
