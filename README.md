@@ -1,11 +1,11 @@
 ```ruby
-usage: satpasslist.py [-h] [--satlist] [--lat LAT] [--long LONG] [--alt ALT] [-t TIMEFRAME] [-e ELEVATIONLIMIT] ...
+usage: satpasslist.py [-h] [--satlist] [--lat LAT] [--long LONG] [--alt ALT] [-t TIMEFRAME] [-e ELEVATIONLIMIT] [-s STARTTIME] ...
 ```
 ```
 A command line utility to print out predicted data on weather satellite passes at your location.
 
 positional arguments:
-  Satellite_Name        Name of the satellite as it appears in the TLE data
+  Satellite_Name        Name of the satellite as it appears in the TLE data. Multiple satellite names can be given by separating them with a comma (,).
 
 options:
   -h, --help            show this help message and exit
@@ -17,6 +17,8 @@ options:
                         Time-frame to look for passes in (in hours). Default is 24.
   -e ELEVATIONLIMIT, --elevationlimit ELEVATIONLIMIT
                         Filter out all passes with max elevations lower than this (in degrees). Default is 0.
+  -s STARTTIME, --starttime STARTTIME
+                        Sets the start date and time for the generated satellite pass schedule. This value is in seconds since the unix epoch. Only dates between year 2000 and 2100 are accepted. Default value is the current time and date.
 ```
 
 

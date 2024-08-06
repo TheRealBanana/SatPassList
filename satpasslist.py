@@ -3,7 +3,7 @@ from time import time
 from datetime import datetime, timedelta
 from urllib.request import urlretrieve
 import argparse
-import os, os.path, pytz
+import os, os.path, pytz, warnings
 from difflib import SequenceMatcher
 orbital = None
 
@@ -17,6 +17,10 @@ RUNFOLDER = os.path.dirname(__file__)
 CONFPATH = os.path.join(RUNFOLDER, "satpasslist.conf")
 TLEFILEPATH = os.path.join(RUNFOLDER, "weather.txt")
 TLEURL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle"
+
+
+#Suppress warnings in the pyorbital module about timezone representations for numpy datetime object
+warnings.filterwarnings('ignore')
 
 class SatFinder:
     def __init__(self, ANTENNA_GPS_LONG, ANTENNA_GPS_LAT, ANTENNA_GPS_ALT, PASSLIST_FILTER_ELEVATION):
@@ -74,12 +78,17 @@ class SatFinder:
             direction = ns[di]
             print("%s) %s\t- %s - %s%s degree MEL pass (%s Long) heading %s in %s - duration %s" % (i+1, satname, nicestarttime, round(max_location[1]), eastwest, longtext, direction, startimetext, durationtext))
 
-    def passlist(self, satparams, satname, time_limit):
+    def passlist(self, satparams, satname, time_limit, starttime):
         if satparams is None:
             return None
+        if starttime == 0: # Zero means use the current date/time
+            starttime_dt = datetime.now(pytz.utc)
+        else: #Convert unix epoch time to UTC datetime object
+            starttime_dt = datetime.fromtimestamp(starttime, tz=pytz.utc)
+
         #Horizon limit will affect the start and finish times of the pass and the displayed total duration
         #Because this is app isn't connected to any tracking apps, we want to display the full pass information from a 0 degree horizon.
-        passlist = satparams.get_next_passes(datetime.now(pytz.utc), time_limit, self.ANTENNA_GPS_LONG, self.ANTENNA_GPS_LAT, self.ANTENNA_GPS_ALT) #Next 24 hours
+        passlist = satparams.get_next_passes(starttime_dt, time_limit, self.ANTENNA_GPS_LONG, self.ANTENNA_GPS_LAT, self.ANTENNA_GPS_ALT) #Next 24 hours
         #Filter out passes with max elevations below our filter limit. We filter here instead of using the horizon arg of get_next_passes because
         #the horizon arg modifies the start and end times of the pass based on that horizon limit. We want the horizon limit AND the full pass times.
         passlist = self.filterpasses(satparams, passlist, self.PASSLIST_FILTER_ELEVATION)
@@ -145,7 +154,7 @@ def updatetle(autocheck=False):
         #File exists and we are autochecking.
         else:
            #App start autocheck, so download if its older than a week, but otherwise do nothing
-           if time() - int(os.stat(TLEFILEPATH).st_mtime) < 7 * 24 * 60 * 60: # 2 days
+           if time() - int(os.stat(TLEFILEPATH).st_mtime) < 7 * 24 * 60 * 60: # 7 days
                 return
     print("Downloading latest weather satellite TLE data from Celestrak.org...")
     try:
@@ -212,9 +221,9 @@ parser.add_argument("--long", help="Longitude of the location we are making pred
 parser.add_argument("--alt", help="Altitude of the location we are making predictions for (in meters). Defaults to sea level (0).", type=float)
 parser.add_argument("-t", "--timeframe", help="Time-frame to look for passes in (in hours). Default is 24.", type=int)
 parser.add_argument("-e", "--elevationlimit", help="Filter out all passes with max elevations lower than this (in degrees). Default is 0.", type=int)
-#parser.add_argument("-u", "--updatetle", help="Manually update weather.txt TLE data from Celestrak.", )
+parser.add_argument("-s", "--starttime", help="Sets the start date and time for the generated satellite pass schedule. This value is in seconds since the unix epoch. Only dates between year 2000 and 2100 are accepted. Default value is the current time and date.", type=int)
 parser.add_argument("-u", "--updatetle", help=argparse.SUPPRESS, action="store_true")
-parser.add_argument("Satellite_Name", help="Name of the satellite as it appears in the TLE data. Multiple satellites names can be given by separating them with a comma (,).", nargs=argparse.REMAINDER)
+parser.add_argument("Satellite_Name", help="Name of the satellite as it appears in the TLE data. Multiple satellite names can be given by separating them with a comma (,).", nargs=argparse.REMAINDER)
 #To save time, a config file can be used to set all the above arguments at once.
 
 def load_config():
@@ -229,6 +238,7 @@ def load_config():
         "alt": 0,
         "timeframe": 24,
         "elevationlimit": 0,
+        "starttime": 0, # 0 means current time/date, anything else is considered a unix epoch format.
         "updatetle": False,
         "Satellite_Name": ""
     }
@@ -296,7 +306,7 @@ def main():
         print("You must give the name of a satellite as the last argument. See --help for more information or --satlist for a list of satellites.")
         exit(1)
 
-    #Basic sanity checks on all the arguments we will be using: lat long alt timeframe elevationlimit Satellite_Name
+    #Basic sanity checks on all the arguments we will be using: lat long alt timeframe elevationlimit starttime Satellite_Name
     if abs(float(args["lat"])) > 90:
         print("Invalid entry for latitude: '%s'. Valid values are between -90 and 90." % args["lat"])
         exit(1)
@@ -309,6 +319,14 @@ def main():
     #Just because we should probably set a limit, we're limiting the timeframe to a max of 30 days (720 hours)
     if not 0 < args["timeframe"] < 721:
         print("Invalid timeframe period, this should be a positive integer value (Default is 24).")
+        exit(1)
+    if not 0 <= args["elevationlimit"] <= 90:
+        print("Invalid elevation limit, this value should be between 0 and 90 degrees.")
+        exit(1)
+    #Accepting dates between year 2000 and 2100 is still way too wide but at least keeps everything from crashing
+    #Again, starttime 0 is current date/time.
+    if not args["starttime"] == 0 and not 946684800 <= args["starttime"] <= 4102444800:
+        print("Invalid unix epoch timestamp given for the starttime. Only dates between year 2000-2100 are accepted. Millisecond timestamps are not supported.")
         exit(1)
 
     #Takes a bit of time to load the library, so for help args and satlist/updatetle we don't need it so we can save time
@@ -330,7 +348,7 @@ def main():
             continue
         #Using the internal satellite names in satparams instead of the supplied name incase we had to correct a typo
         satname = satparams.satellite_name
-        passes = satfind.passlist(satparams, satname, args["timeframe"])
+        passes = satfind.passlist(satparams, satname, args["timeframe"], args["starttime"])
         if passes is None:
             continue
         #Annotate the passes list with the satname and satparams
