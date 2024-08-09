@@ -93,7 +93,7 @@ class SatFinder:
         #the horizon arg modifies the start and end times of the pass based on that horizon limit. We want the horizon limit AND the full pass times.
         passlist = self.filterpasses(satparams, passlist, self.PASSLIST_FILTER_ELEVATION)
         if len(passlist) > 0:
-            print("Found %s matching passes in the next %s hours for '%s'." % (len(passlist), time_limit, satname))
+            print("Found %s matching pass%s in the next %s hours for '%s'." % (len(passlist), "es" if len(passlist) > 1 else "", time_limit, satname))
         else:
             print("No matching passes for %s found in the next %s hours using current TLE data." % (satname, time_limit))
             return None
