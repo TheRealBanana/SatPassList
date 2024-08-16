@@ -57,10 +57,10 @@ class SatFinder:
             nicestarttime = localtz.strftime("%Y-%m-%d %H:%M:%S")
             starttime = localtz - datetime.now().astimezone()
             durationtext = create_time_string((passdata[1] - passdata[0]).total_seconds())
-            startimetext = create_time_string(starttime.total_seconds())
+            starttimetext = create_time_string(starttime.total_seconds())
             max_location = satparams.get_observer_look(passdata[2], self.ANTENNA_GPS_LONG, self.ANTENNA_GPS_LAT, self.ANTENNA_GPS_ALT)
             longitude = round(satparams.get_lonlatalt(passdata[2])[0]) #Longitude at max elevation
-            longtext = "%s%s" % (abs(longitude), "E" if longitude > 0 else "W")
+            longtext = f"{abs(longitude)}{'E' if longitude > 0 else 'W'}"
             eastwest = "W" if longitude < self.ANTENNA_GPS_LONG else "E"
             #Find the direction. Only way I could think of is to look at the change in azimuth angle and if its going down or up
             #One minute ahead in time should be enough to tell for sure what direction we are going, using max elevation as reference
@@ -76,7 +76,7 @@ class SatFinder:
             if max_location[0] < 180:
                 di ^= 1
             direction = ns[di]
-            print("%s) %s\t- %s - %s%s degree MEL pass (%s Long) heading %s in %s - duration %s" % (i+1, satname, nicestarttime, round(max_location[1]), eastwest, longtext, direction, startimetext, durationtext))
+            print(f"{i+1}) {satname}\t- {nicestarttime} - {round(max_location[1])}{eastwest} degree MEL pass ({longtext} Long) heading {direction} in {starttimetext} - duration {durationtext}")
 
     def passlist(self, satparams, satname, time_limit, starttime):
         if satparams is None:
@@ -93,9 +93,9 @@ class SatFinder:
         #the horizon arg modifies the start and end times of the pass based on that horizon limit. We want the horizon limit AND the full pass times.
         passlist = self.filterpasses(satparams, passlist, self.PASSLIST_FILTER_ELEVATION)
         if len(passlist) > 0:
-            print("Found %s matching pass%s in the next %s hours for '%s'." % (len(passlist), "es" if len(passlist) > 1 else "", time_limit, satname))
+            print(f"Found {len(passlist)} matching pass{'es' if len(passlist) > 1 else ''} in the next {time_limit} hours for '{satname}'.")
         else:
-            print("No matching passes for %s found in the next %s hours using current TLE data." % (satname, time_limit))
+            print(f"No matching passes for {satname} found in the next {time_limit} hours using current TLE data.")
             return None
         return passlist
 
@@ -106,16 +106,16 @@ class SatFinder:
         except KeyError:
             closenamecheck = self.findclosestsatname(satname)
             if isinstance(closenamecheck, list):
-                outstr = "Couldn't find satellite '%s' in TLE file"
+                outstr = f"Couldn't find satellite {satname}' in TLE file"
                 if closenamecheck[1] is not None:
-                    outstr += ", did you mean '%s'? " % closenamecheck[1]
+                    outstr += f", did you mean '{closenamecheck[1]}'? "
                 else:
                     outstr +=". "
                 outstr += "Use the --satlist argument to see a list of available satellites."
-                print(outstr % satname)
+                print(outstr)
                 return None
             else:
-                print("Returning results for '%s' as '%s' wasn't found in the satellite list." % (closenamecheck, satname))
+                print(f"Returning results for '{closenamecheck}' as '{satname}' wasn't found in the satellite list.")
                 satparams = orbital.Orbital(closenamecheck, tle_file=TLEFILEPATH)
         except NotImplementedError:
             print("Pyorbital doesn't yet support calculations for geostationary satellites. There are alternative libraries that I have yet to try that may support them.")
@@ -160,7 +160,7 @@ def updatetle(autocheck=False):
     try:
         urlretrieve(TLEURL, TLEFILEPATH)
     except Exception as e:
-        print("Failed to download weather.txt from celestrak.org. Reason: \n%s" % str(e))
+        print(f"Failed to download weather.txt from celestrak.org. Reason: \n {str(e)}")
     else:
         print("Successfully downloaded a fresh weather.txt from celestrak.org")
 
@@ -171,16 +171,16 @@ def create_time_string(seconds_total):
     seconds = int(seconds_total%86400%3600%60)
     timestring = ""
     if days > 0:
-        timestring += "%s day " % days
+        timestring += f"{days} day "
         if days > 1: timestring = timestring[:-1] + "s" + timestring[-1:]
     if hours > 0:
-        timestring += "%s hour " % hours
+        timestring += f"{hours} hour "
         if hours > 1: timestring = timestring[:-1] + "s" + timestring[-1:]
     if minutes > 0:
-        timestring += "%s minute " % minutes
+        timestring += f"{minutes} minute "
         if minutes > 1: timestring = timestring[:-1] + "s" + timestring[-1:]
     if seconds > 0:
-        timestring += "%s second" % seconds
+        timestring += f"{seconds} second"
         if seconds > 1: timestring += "s"
     timestring = timestring.strip()
     return timestring
@@ -258,7 +258,7 @@ def load_config():
                 #Ok a few values in the config need to be made into floats or ints. Handle that here.
                 #Satellite_Name breaks things so dont mess with it
                 if key != "Satellite_Name":
-                    tfunc = parser._option_string_actions["--%s" % key].type
+                    tfunc = parser._option_string_actions[f"--{key}"].type
                     value = tfunc(value)
                 config[key] = value # Will fail if you misspell anything
     #Now go through command-line args and override the config values with anything given
@@ -308,14 +308,15 @@ def main():
 
     #Basic sanity checks on all the arguments we will be using: lat long alt timeframe elevationlimit starttime Satellite_Name
     if abs(float(args["lat"])) > 90:
-        print("Invalid entry for latitude: '%s'. Valid values are between -90 and 90." % args["lat"])
+        print(f"Invalid entry for latitude: '{args['lat']}'. Valid values are between -90 and 90.")
         exit(1)
     if abs(float(args["long"])) > 180:
-        print("Invalid entry for longitude: '%s'. Valid values are between -180 and 180." % args["long"])
+        print(f"Invalid entry for longitude: '{args['long']}'. Valid values are between -180 and 180.")
         exit(1)
     #Nothing valid on earth should ever be outside those values (or even near either).
     if not -500 < float(args["alt"]) < 9000:
-        print("Invalid entry for altitude: '%s'. This should be your altitude in meters, recheck your altimeter." % args["alt"])
+        print(f"Invalid entry for altitude: '{args['alt']}'. This should be your altitude in meters, recheck your altimeter.")
+        exit(1)
     #Just because we should probably set a limit, we're limiting the timeframe to a max of 30 days (720 hours)
     if not 0 < args["timeframe"] < 721:
         print("Invalid timeframe period, this should be a positive integer value (Default is 24).")
