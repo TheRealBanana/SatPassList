@@ -5,6 +5,7 @@ from urllib.request import urlretrieve
 import argparse
 import os, os.path, pytz, warnings
 from difflib import SequenceMatcher
+from distutils.util import strtobool
 orbital = None
 
 #If the sequence matcher thinks the input is over SATNAME_MATCH_RATIO it will assume they are the same
@@ -32,17 +33,22 @@ class SatFinder:
         self.updatesatnames()
 
     #Takes in a passlist, filters out passes with max elevations under the elevation_limit, and returns the list
-    def filterpasses(self, satparams, passlist, elevation_limit):
+    #Also now filters out passes on the side we don't want
+    def filterpasses(self, satparams, passlist, elevation_limit, eastwestfilter):
         filteredpasses = []
         for passdata in passlist:
             _, maxelevation = satparams.get_observer_look(passdata[2], self.ANTENNA_GPS_LONG, self.ANTENNA_GPS_LAT, self.ANTENNA_GPS_ALT)
             if float(maxelevation) < elevation_limit:
                 continue
+            # Skip passes on the side we dont want, or dont skip anything if none.
+            longitude = round(satparams.get_lonlatalt(passdata[2])[0]) #Longitude at max elevation
+            eastwest = "W" if longitude < self.ANTENNA_GPS_LONG else "E"
+            if eastwestfilter is not None:
+                if eastwestfilter == "E" and eastwest == "W": continue
+                elif eastwestfilter == "W" and eastwest == "E": continue
             filteredpasses.append(passdata)
         return filteredpasses
 
-    #TODO I would definitely appreciate a way to filter out eastern or western passes at certain times.
-    #Would be easy enough to do that here
     def printpasses(self, passlist):
         #Our passdata is a list of passes with our satname and satparams attached to the end
         for i, passdata in enumerate(passlist):
@@ -78,7 +84,7 @@ class SatFinder:
             direction = ns[di]
             print(f"{i+1}) {satname}\t- {nicestarttime} - {round(max_location[1])}{eastwest} degree MEL pass ({longtext} Long) heading {direction} in {starttimetext} - duration {durationtext}")
 
-    def passlist(self, satparams, satname, time_limit, starttime):
+    def passlist(self, satparams, satname, time_limit, starttime, eastwestfilter):
         if satparams is None:
             return None
         if starttime == 0: # Zero means use the current date/time
@@ -91,7 +97,7 @@ class SatFinder:
         passlist = satparams.get_next_passes(starttime_dt, time_limit, self.ANTENNA_GPS_LONG, self.ANTENNA_GPS_LAT, self.ANTENNA_GPS_ALT) #Next 24 hours
         #Filter out passes with max elevations below our filter limit. We filter here instead of using the horizon arg of get_next_passes because
         #the horizon arg modifies the start and end times of the pass based on that horizon limit. We want the horizon limit AND the full pass times.
-        passlist = self.filterpasses(satparams, passlist, self.PASSLIST_FILTER_ELEVATION)
+        passlist = self.filterpasses(satparams, passlist, self.PASSLIST_FILTER_ELEVATION, eastwestfilter)
         if len(passlist) > 0:
             print(f"Found {len(passlist)} matching pass{'es' if len(passlist) > 1 else ''} in the next {time_limit} hours for '{satname}'.")
         else:
@@ -223,6 +229,13 @@ parser.add_argument("-t", "--timeframe", help="Time-frame to look for passes in 
 parser.add_argument("-e", "--elevationlimit", help="Filter out all passes with max elevations lower than this (in degrees). Default is 0.", type=int)
 parser.add_argument("-s", "--starttime", help="Sets the start date and time for the generated satellite pass schedule. This value is in seconds since the unix epoch. Only dates between year 2000 and 2100 are accepted. Default value is the current time and date.", type=int)
 parser.add_argument("-u", "--updatetle", help=argparse.SUPPRESS, action="store_true")
+parser.add_argument("--east", help="Only show passes on the eastern side of the antenna.", action="store_true")
+parser.add_argument("--west", help="Only show passes on the western side of the antenna.", action="store_true")
+#Args with a store_true action don't support the type= argument and their internal type is None. This breaks my arg parsing code
+#that tries to make the text into actual types. So we change their internal types from None to bool to fix this.
+#Catch here is the bool() function thinks anything not 0 is true. So we have to use distuils.utils.strtobool to fix that string to a number.
+parser._option_string_actions["--east"].type = lambda tf: bool(strtobool(tf))
+parser._option_string_actions["--west"].type = lambda tf: bool(strtobool(tf))
 parser.add_argument("Satellite_Name", help="Name of the satellite as it appears in the TLE data. Multiple satellite names can be given by separating them with a comma (,).", nargs=argparse.REMAINDER)
 #To save time, a config file can be used to set all the above arguments at once.
 
@@ -240,6 +253,8 @@ def load_config():
         "elevationlimit": 0,
         "starttime": 0, # 0 means current time/date, anything else is considered a unix epoch format.
         "updatetle": False,
+        "east": False,
+        "west": False,
         "Satellite_Name": ""
     }
     #We are assuming the config file is in the same directory as this .py file. Running from a folder in your PATH var and loading
@@ -272,6 +287,10 @@ def load_config():
             if len(val) > 0:
                 val = " ".join(val)
             else:
+                continue
+        #Ignore any False values from east/west flags
+        if k in "east west":
+            if val is False:
                 continue
         config[k] = val
 
@@ -326,9 +345,15 @@ def main():
         exit(1)
     #Accepting dates between year 2000 and 2100 is still way too wide but at least keeps everything from crashing
     #Again, starttime 0 is current date/time.
+    #TODO Would be nice to be able to have quick shortcuts like "+5d" for a schedule starting 5 days from now.
     if not args["starttime"] == 0 and not 946684800 <= args["starttime"] <= 4102444800:
         print("Invalid unix epoch timestamp given for the starttime. Only dates between year 2000-2100 are accepted. Millisecond timestamps are not supported.")
         exit(1)
+    # Using both --east and --west at the same time is nonsensical so complain
+    if args["east"] is True and args["west"] is True:
+        print("Warning: You cannot use both --east and --west at the same time. If you want passes on both sides don't include either flag. Showing both sides.")
+        args["east"] = False
+        args["west"] = False
 
     #Takes a bit of time to load the library, so for help args and satlist/updatetle we don't need it so we can save time
     print("Loading pyorbital...")
@@ -349,7 +374,12 @@ def main():
             continue
         #Using the internal satellite names in satparams instead of the supplied name incase we had to correct a typo
         satname = satparams.satellite_name
-        passes = satfind.passlist(satparams, satname, args["timeframe"], args["starttime"])
+        eastwestfilter = None
+        if args["east"] is True:
+            eastwestfilter = "E"
+        elif args["west"] is True:
+            eastwestfilter = "W"
+        passes = satfind.passlist(satparams, satname, args["timeframe"], args["starttime"], eastwestfilter)
         if passes is None:
             continue
         #Annotate the passes list with the satname and satparams
