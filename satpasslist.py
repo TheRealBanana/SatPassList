@@ -108,7 +108,7 @@ class SatFinder:
     def getsatparams(self, satname):
         #Check if the satellite exists
         try:
-            satparams = orbital.Orbital(satname, tle_file=TLEFILEPATH)
+            satparams = Orbital(satname, tle_file=TLEFILEPATH)
         except KeyError:
             closenamecheck = self.findclosestsatname(satname)
             if isinstance(closenamecheck, list):
@@ -122,7 +122,7 @@ class SatFinder:
                 return None
             else:
                 print(f"Returning results for '{closenamecheck}' as '{satname}' wasn't found in the satellite list.")
-                satparams = orbital.Orbital(closenamecheck, tle_file=TLEFILEPATH)
+                satparams = Orbital(closenamecheck, tle_file=TLEFILEPATH)
         except NotImplementedError:
             print("Pyorbital doesn't yet support calculations for geostationary satellites. There are alternative libraries that I have yet to try that may support them.")
             return None
@@ -357,7 +357,7 @@ def main():
 
     #Takes a bit of time to load the library, so for help args and satlist/updatetle we don't need it so we can save time
     print("Loading pyorbital...")
-    from pyorbital import orbital
+    from pyorbital.orbital import Orbital
 
     #Ok so all values except the satellite name have been validated as being somewhat sane, we can get a SatFinder obj running.
     #Convert Satellite_Name into a list, which will separate values at the comma and remove whitespace at the ends.
