@@ -6,7 +6,7 @@ import argparse
 import os, os.path, pytz, warnings
 from difflib import SequenceMatcher
 from distutils.util import strtobool
-orbital = None
+Orbital = None
 
 #If the sequence matcher thinks the input is over SATNAME_MATCH_RATIO it will assume they are the same
 SATNAME_MATCH_RATIO = 0.90
@@ -298,7 +298,7 @@ def load_config():
 
 
 def main():
-    global orbital
+    global Orbital
     args = load_config()
     # Check if we are updating the TLE first
     if args["updatetle"] is True:
